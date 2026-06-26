@@ -1,0 +1,29 @@
+# Environment — contains your IP address and secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Persistent runtime data (Docker volume contents)
+data/settings.json
+data/metrics.db
+data/metrics.db-wal
+data/metrics.db-shm
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo

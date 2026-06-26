@@ -978,6 +978,79 @@ tr:hover td { background: var(--surface-2); }
   cursor: help;
 }
 
+/* ============================================================
+   History tab
+   ============================================================ */
+.hist-range-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.hist-click-hint {
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: normal;
+  letter-spacing: 0;
+  text-transform: none;
+  margin-left: 8px;
+}
+
+.hist-proc-tooltip {
+  position: fixed;
+  z-index: 600;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  min-width: 230px;
+  max-width: 340px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.6);
+  font-family: var(--font);
+  font-size: 11px;
+  display: none;
+}
+.hist-tooltip-hdr {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+.hist-tooltip-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 2px;
+  line-height: 1;
+}
+.hist-tooltip-close:hover { color: var(--text); }
+.hist-tooltip-loading {
+  color: var(--muted);
+  padding: 4px 0 2px;
+  animation: hist-pulse 1s ease-in-out infinite;
+}
+@keyframes hist-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.hist-tooltip-empty { color: var(--muted); padding: 4px 0; }
+.hist-tooltip-tbl { width: 100%; border-collapse: collapse; }
+.hist-tooltip-tbl thead th {
+  color: var(--muted);
+  text-align: left;
+  padding-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+  font-weight: normal;
+}
+.hist-tooltip-tbl tbody td { padding: 3px 6px 3px 0; }
+.hist-tooltip-tbl tbody td:not(:first-child) { text-align: right; color: var(--text); }
+
 .hint-tooltip {
   position: fixed;
   z-index: 9999;

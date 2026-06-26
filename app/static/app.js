@@ -15,6 +15,15 @@ const TABS = [
   { id: 'processes',  label: 'Processes' },
   { id: 'sensors',    label: 'Sensors' },
   { id: 'system',     label: 'System Info' },
+  { id: 'history',    label: 'History' },
+];
+
+const HISTORY_RANGES = [
+  { hours: 1,   bucket: 30,   label: '1h'  },
+  { hours: 6,   bucket: 60,   label: '6h'  },
+  { hours: 24,  bucket: 300,  label: '24h' },
+  { hours: 168, bucket: 1800, label: '7d'  },
+  { hours: 720, bucket: 7200, label: '30d' },
 ];
 
 // ============================================================
@@ -39,6 +48,8 @@ const S = {
   },
   prevNet: null,
   prevNetAt: 0,
+  historyRange: 6,
+  historyFetchId: 0,
 };
 
 // ============================================================
@@ -1087,6 +1098,275 @@ function renderSystem(d) {
 }
 
 // ============================================================
+// HISTORY TAB
+// ============================================================
+function fmtHistTs(unixSec, hours) {
+  var d = new Date(unixSec * 1000);
+  if (hours <= 24) return d.toTimeString().slice(0, 5);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] + ' ' + d.toTimeString().slice(0, 5);
+}
+
+// ── Histogram point-click tooltip ────────────────────────────
+var _histTooltipEl = null;
+
+function _getHistTooltip() {
+  if (!_histTooltipEl) {
+    _histTooltipEl = document.createElement('div');
+    _histTooltipEl.id = 'hist-proc-tooltip';
+    _histTooltipEl.className = 'hist-proc-tooltip';
+    document.body.appendChild(_histTooltipEl);
+  }
+  return _histTooltipEl;
+}
+
+function _positionTooltip(el, clientX, clientY) {
+  el.style.left = (clientX + 14) + 'px';
+  el.style.top  = (clientY - 10) + 'px';
+  requestAnimationFrame(function() {
+    var r = el.getBoundingClientRect();
+    if (r.right  > window.innerWidth  - 8) el.style.left = (clientX - r.width  - 14) + 'px';
+    if (r.bottom > window.innerHeight - 8) el.style.top  = (clientY - r.height + 10) + 'px';
+  });
+}
+
+function _closeHistTooltip() {
+  var el = _getHistTooltip();
+  el.style.display = 'none';
+}
+
+function _addOutsideListener() {
+  setTimeout(function() {
+    document.addEventListener('click', function handler(e) {
+      var el = _getHistTooltip();
+      if (el && !el.contains(e.target)) {
+        el.style.display = 'none';
+      } else {
+        document.addEventListener('click', handler, { once: true });
+      }
+    }, { once: true });
+  }, 0);
+}
+
+function makeHistClickHandler(timestamps, windowSec) {
+  return function(event, elements) {
+    if (!elements || !elements.length) return;
+    var idx = elements[0].index;
+    var ts = timestamps[idx];
+    if (ts == null) return;
+    if (event.native) event.native.stopPropagation();
+    var el = _getHistTooltip();
+    var d = new Date(ts * 1000);
+    var label = d.toLocaleDateString([], {month:'short', day:'numeric'}) +
+                ' ' + d.toTimeString().slice(0, 5);
+    el.innerHTML =
+      '<div class="hist-tooltip-hdr">' +
+        '<span class="color-cyan">' + esc(label) + '</span>' +
+        '<button class="hist-tooltip-close" onclick="_closeHistTooltip()">&#x2715;</button>' +
+      '</div>' +
+      '<div class="hist-tooltip-loading">Loading&hellip;</div>';
+    el.style.display = 'block';
+    if (event.native) _positionTooltip(el, event.native.clientX, event.native.clientY);
+    _addOutsideListener();
+    _fetchProcessesAt(ts, windowSec, label);
+  };
+}
+
+async function _fetchProcessesAt(ts, windowSec, label) {
+  try {
+    var resp = await fetch('/api/history/processes/at?timestamp=' + ts + '&window_sec=' + windowSec);
+    var body = await resp.json();
+    var el = _getHistTooltip();
+    if (el.style.display === 'none') return;
+    var close = '<button class="hist-tooltip-close" onclick="_closeHistTooltip()">&#x2715;</button>';
+    var hdr = '<div class="hist-tooltip-hdr"><span class="color-cyan">' + esc(label) + '</span>' + close + '</div>';
+    var procs = body.processes || body;  // backwards-compat if shape changes
+    var trackingStart = body.tracking_start;
+
+    if (!procs || !procs.length) {
+      var msg = 'No process data recorded at this time.';
+      if (trackingStart && ts < trackingStart) {
+        var sd = new Date(trackingStart * 1000);
+        var sl = sd.toLocaleDateString([], {month:'short', day:'numeric'}) + ' ' + sd.toTimeString().slice(0, 5);
+        msg = 'Process tracking started at ' + sl + '.<br>Click a more recent point.';
+      }
+      el.innerHTML = hdr + '<div class="hist-tooltip-empty">' + msg + '</div>';
+      return;
+    }
+    var rows = procs.map(function(p) {
+      return '<tr>' +
+        '<td class="color-cyan">' + esc(p.name) + '</td>' +
+        '<td>' + pct(p.cpu_pct, 1) + '%</td>' +
+        '<td>' + (p.mem_pct != null ? pct(p.mem_pct, 1) + '%' : '<span class="muted-text">—</span>') + '</td>' +
+        '</tr>';
+    }).join('');
+    el.innerHTML = hdr +
+      '<table class="hist-tooltip-tbl">' +
+        '<thead><tr><th>Process</th><th>CPU</th><th>Mem</th></tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>';
+  } catch (e) {
+    var el2 = _getHistTooltip();
+    if (el2) el2.innerHTML = '<span class="muted-text">Error loading processes.</span>';
+  }
+}
+
+function _histOnHover(e, els) {
+  if (e.native) e.native.target.style.cursor = els.length ? 'pointer' : 'default';
+}
+
+function _withClick(cfg, timestamps, windowSec) {
+  cfg.options.onClick = makeHistClickHandler(timestamps, windowSec);
+  cfg.options.onHover = _histOnHover;
+  return cfg;
+}
+
+function renderHistory() {
+  var rangeBar = HISTORY_RANGES.map(function(r) {
+    var active = r.hours === S.historyRange ? ' active' : '';
+    return '<button class="tab-btn' + active + '" onclick="setHistoryRange(' + r.hours + ')">' + r.label + '</button>';
+  }).join('');
+  return '<div class="hist-range-bar">' + rangeBar + '</div>' +
+    '<div id="hist-charts"><div class="loading-box">Loading history&hellip;</div></div>';
+}
+
+function setHistoryRange(hours) {
+  S.historyRange = hours;
+  renderTab('history');
+}
+
+async function loadHistoryCharts() {
+  var myId = ++S.historyFetchId;
+  var r = HISTORY_RANGES.find(function(x) { return x.hours === S.historyRange; }) || HISTORY_RANGES[1];
+  try {
+    var results = await Promise.all([
+      fetch('/api/history/metrics?hours=' + r.hours + '&bucket_sec=' + r.bucket),
+      fetch('/api/history/disk?hours='    + r.hours + '&bucket_sec=' + r.bucket),
+      fetch('/api/history/processes?hours=' + r.hours),
+    ]);
+    var metrics = await results[0].json();
+    var disk    = await results[1].json();
+    var procs   = await results[2].json();
+    if (S.historyFetchId !== myId || S.tab !== 'history') return;
+    renderHistoryCharts(metrics, disk, procs, r.hours);
+  } catch (e) {
+    if (S.historyFetchId !== myId) return;
+    var el = document.getElementById('hist-charts');
+    if (el) el.innerHTML = '<p class="muted-text">Failed to load history: ' + esc(String(e)) + '</p>';
+  }
+}
+
+function renderHistoryCharts(metrics, disk, procs, hours) {
+  var el = document.getElementById('hist-charts');
+  if (!el) return;
+
+  if (!metrics || !metrics.length) {
+    el.innerHTML = '<div class="alert alert-info">&#x2139; No history yet — data is collected every 10 seconds.</div>';
+    return;
+  }
+
+  var rangeConf  = HISTORY_RANGES.find(function(x) { return x.hours === hours; }) || HISTORY_RANGES[1];
+  var windowSec  = Math.max(15, Math.round(rangeConf.bucket / 2));
+  var metricTs   = metrics.map(function(r) { return r.timestamp; });
+  var ts         = metrics.map(function(r) { return fmtHistTs(r.timestamp, hours); });
+
+  var hasGpu = metrics.filter(function(r) { return r.gpu_pct != null; }).length >= 2;
+  var diskSection = '';
+  if (disk && disk.length) {
+    diskSection = '<div class="card mb-16"><div class="card-title">Disk Usage <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-disk"></canvas></div></div>';
+  }
+  var gpuSection = hasGpu
+    ? '<div class="card mb-16"><div class="card-title">GPU Usage <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-gpu"></canvas></div></div>'
+    : '';
+
+  el.innerHTML =
+    '<div class="card mb-16"><div class="card-title">CPU Usage <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-cpu"></canvas></div></div>' +
+    '<div class="card mb-16"><div class="card-title">RAM Usage <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-ram"></canvas></div></div>' +
+    gpuSection +
+    '<div class="card mb-16"><div class="card-title">Load Average <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-load"></canvas></div></div>' +
+    '<div class="card mb-16"><div class="card-title">Network Throughput <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-net"></canvas></div></div>' +
+    diskSection +
+    renderTopProcsTable(procs);
+
+  mkChart('hist-cpu',  _withClick(pctChartCfg(ts, [mkDs('CPU %', metrics.map(function(r) { return r.cpu_pct; }), '#00e5ff')]), metricTs, windowSec));
+  mkChart('hist-ram',  _withClick(pctChartCfg(ts, [mkDs('RAM %', metrics.map(function(r) { return r.ram_pct; }), '#bb00ff')]), metricTs, windowSec));
+
+  if (hasGpu) {
+    var gpuRows = metrics.filter(function(r) { return r.gpu_pct != null; });
+    var gpuTs   = gpuRows.map(function(r) { return fmtHistTs(r.timestamp, hours); });
+    var gpuRawTs = gpuRows.map(function(r) { return r.timestamp; });
+    var gpuDs   = mkDs('GPU %', gpuRows.map(function(r) { return r.gpu_pct; }), '#00ff41');
+    gpuDs.spanGaps = true;
+    var gpuCfg  = pctChartCfg(gpuTs, [gpuDs]);
+    delete gpuCfg.options.scales.y.max;
+    gpuCfg.options.scales.y.suggestedMax = 10;
+    mkChart('hist-gpu', _withClick(gpuCfg, gpuRawTs, windowSec));
+  }
+
+  var loadCfg = pctChartCfg(ts, [
+    mkDs('1m',  metrics.map(function(r) { return r.load_1m;  }), '#00e5ff'),
+    mkDs('5m',  metrics.map(function(r) { return r.load_5m;  }), '#ffb300'),
+    mkDs('15m', metrics.map(function(r) { return r.load_15m; }), '#00ff41'),
+  ]);
+  delete loadCfg.options.scales.y.max;
+  loadCfg.options.scales.y.suggestedMax = 1;
+  mkChart('hist-load', _withClick(loadCfg, metricTs, windowSec));
+
+  var rxRates = [0], txRates = [0];
+  for (var i = 1; i < metrics.length; i++) {
+    var dt = metrics[i].timestamp - metrics[i - 1].timestamp;
+    rxRates.push(dt > 0 ? Math.max(0, (metrics[i].net_rx_bytes - metrics[i - 1].net_rx_bytes) / dt) : 0);
+    txRates.push(dt > 0 ? Math.max(0, (metrics[i].net_tx_bytes - metrics[i - 1].net_tx_bytes) / dt) : 0);
+  }
+  mkChart('hist-net', _withClick(netChartCfg(ts, [
+    mkDs('RX', rxRates, '#00e5ff', false),
+    mkDs('TX', txRates, '#bb00ff', false),
+  ]), metricTs, windowSec));
+
+  if (disk && disk.length) {
+    var diskTsSet = {}, diskTs = [];
+    disk.forEach(function(r) {
+      if (!diskTsSet[r.timestamp]) { diskTsSet[r.timestamp] = true; diskTs.push(r.timestamp); }
+    });
+    diskTs.sort(function(a, b) { return a - b; });
+    var diskByMount = {};
+    disk.forEach(function(r) {
+      if (!diskByMount[r.mount_point]) diskByMount[r.mount_point] = {};
+      diskByMount[r.mount_point][r.timestamp] = r.used_percent;
+    });
+    var mounts = Object.keys(diskByMount).sort();
+    var diskColors = ['#00e5ff', '#bb00ff', '#00ff41', '#ffb300', '#ff1744'];
+    var diskDatasets = mounts.map(function(m, idx) {
+      return mkDs(m, diskTs.map(function(t) {
+        var v = diskByMount[m][t];
+        return v != null ? v : null;
+      }), diskColors[idx % diskColors.length]);
+    });
+    mkChart('hist-disk', _withClick(
+      pctChartCfg(diskTs.map(function(t) { return fmtHistTs(t, hours); }), diskDatasets),
+      diskTs, windowSec
+    ));
+  }
+}
+
+function renderTopProcsTable(procs) {
+  if (!procs || !procs.length) return '';
+  var rows = procs.slice(0, 15).map(function(p) {
+    return trow([
+      '<span class="color-cyan">' + esc(p.name) + '</span>',
+      pct(p.peak_cpu_pct, 1) + '%',
+      pct(p.avg_cpu_pct,  1) + '%',
+      p.peak_mem_pct != null ? pct(p.peak_mem_pct, 1) + '%' : '<span class="muted-text">—</span>',
+    ]);
+  });
+  return '<div class="card mt-16">' +
+    '<div class="card-title">Top Processes — CPU (selected range)</div>' +
+    '<div class="table-wrap"><table><thead>' +
+      trow(['Process', 'Peak CPU', 'Avg CPU', 'Peak Mem'], true) +
+    '</thead><tbody>' + rows.join('') + '</tbody></table></div>' +
+    '</div>';
+}
+
+// ============================================================
 // CHART INITIALIZERS (run after innerHTML is set)
 // ============================================================
 function initCharts(tabId) {
@@ -1125,6 +1405,10 @@ function initCharts(tabId) {
       mkDs('TX', h.netTx, '#bb00ff', false),
     ]));
   }
+
+  if (tabId === 'history') {
+    loadHistoryCharts();
+  }
 }
 
 // ============================================================
@@ -1140,6 +1424,7 @@ var RENDERERS = {
   processes: renderProcesses,
   sensors:   renderSensors,
   system:    renderSystem,
+  history:   renderHistory,
 };
 
 function renderTab(tabId) {
@@ -1211,7 +1496,7 @@ async function fetchAll() {
     var luEl = document.getElementById('last-updated');
     if (luEl) luEl.textContent = 'Updated ' + new Date().toLocaleTimeString();
 
-    renderTab(S.tab);
+    if (S.tab !== 'history') renderTab(S.tab);
   } catch (e) {
     console.error('Fetch error:', e);
     var luEl = document.getElementById('last-updated');

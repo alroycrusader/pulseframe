@@ -112,17 +112,35 @@ from app import storage as _storage
 
 
 @app.get("/api/history/metrics")
-async def history_metrics(hours: float = 6.0):
+async def history_metrics(hours: float = 6.0, bucket_sec: int = None):
     try:
-        return _storage.query_metrics(hours)
+        return _storage.query_metrics(hours, bucket_sec)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/history/disk")
-async def history_disk(hours: float = 6.0, mount: str = None):
+async def history_disk(hours: float = 6.0, mount: str = None, bucket_sec: int = None):
     try:
-        return _storage.query_disk(hours, mount)
+        return _storage.query_disk(hours, mount, bucket_sec)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/history/processes")
+async def history_processes(hours: float = 6.0):
+    try:
+        return _storage.query_processes(hours)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/history/processes/at")
+async def history_processes_at(timestamp: float, window_sec: float = 30):
+    try:
+        procs = _storage.query_processes_at(timestamp, window_sec)
+        tracking_start = _storage.query_process_tracking_start()
+        return {"processes": procs, "tracking_start": tracking_start}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

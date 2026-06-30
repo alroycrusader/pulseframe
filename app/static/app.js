@@ -618,6 +618,10 @@ function renderOverview(d) {
 var SERVICE_STATUS_DOT = { ok: 'color-green', warn: 'color-yellow', down: 'color-pink' };
 
 function renderServiceHealth(services) {
+  if (services === false) {
+    return '<div class="card mt-16"><div class="card-title">Service Health</div>' +
+      '<div class="muted-text">Unable to load service health</div></div>';
+  }
   if (!services) {
     return '<div class="card mt-16"><div class="card-title">Service Health</div>' +
       '<div class="muted-text">Loading&hellip;</div></div>';
@@ -1503,8 +1507,18 @@ function fetchHistOverlay(field, hours, bucketSec) {
 // side) on the same canvas. Best-effort: silently does nothing if the
 // canvas/chart is gone (e.g. user switched tabs before the fetch resolved)
 // or if there's no history yet.
+//
+// overlayGen[canvasId] guards against a fast tab-away-and-back: if the
+// user leaves and returns to the tab before this fetch resolves, initCharts
+// runs again and calls this a second time for the same canvasId with fresh
+// live data. Without the generation check, the first (stale) call's .then
+// would still fire and briefly overwrite the second call's correct chart
+// with its outdated liveLabels/liveValues closure.
+var overlayGen = {};
 function applyHistoricalOverlay(canvasId, liveLabels, liveValues, liveLabel, liveColor, field, warnVal, critVal) {
+  var gen = (overlayGen[canvasId] = (overlayGen[canvasId] || 0) + 1);
   fetchHistOverlay(field, 1, 60).then(function(overlay) {
+    if (overlayGen[canvasId] !== gen) return;
     if (!overlay || !overlay.values.length) return;
     var chart = S.charts[canvasId];
     var el = document.getElementById(canvasId);
@@ -1644,14 +1658,19 @@ async function fetchAll() {
     S.everLoaded = true;
 
     // Service health is best-effort — a failure here shouldn't break the
-    // rest of the dashboard, it just leaves the Service Health card stale.
+    // rest of the dashboard. On failure, mark it explicitly (`false`) rather
+    // than leaving it unset, since S.data is replaced wholesale every cycle —
+    // otherwise a failing endpoint would leave the card stuck on "Loading…"
+    // forever instead of showing an error.
     try {
       var hResp = await healthPromise;
       if (hResp && hResp.ok) {
         var hBody = await hResp.json();
         S.data.health = hBody.services || [];
+      } else {
+        S.data.health = false;
       }
-    } catch (eh) { /* ignore — best-effort */ }
+    } catch (eh) { S.data.health = false; }
 
     // Extract key metrics for history
     var cpuPct = parseFloat(

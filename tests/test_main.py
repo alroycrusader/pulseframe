@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -13,6 +15,22 @@ def test_health_services_endpoint_reports_known_services():
         for s in body["services"]:
             assert s["status"] in ("ok", "warn", "down")
             assert isinstance(s["detail"], str) and s["detail"]
+
+
+def test_health_services_degrades_alerting_row_instead_of_500ing():
+    # If settings_store can't be read (e.g. unreadable settings.json), the
+    # Alerting row should degrade to "down" — the rest of the endpoint
+    # (Metrics Collector, History Storage) must still return 200, not a
+    # blanket 500 for the whole route.
+    with TestClient(app) as client:
+        with patch("app.main.settings_store.get_webhooks", side_effect=RuntimeError("boom")):
+            resp = client.get("/api/health/services")
+            assert resp.status_code == 200
+            body = resp.json()
+            by_name = {s["name"]: s for s in body["services"]}
+            assert by_name["Alerting"]["status"] == "down"
+            assert by_name["Metrics Collector"]["status"] in ("ok", "warn", "down")
+            assert by_name["History Storage"]["status"] in ("ok", "warn", "down")
 
 
 def test_thresholds_endpoint_is_read_only_and_has_known_keys():

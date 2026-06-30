@@ -289,15 +289,20 @@ async def health_services():
 
         # Alerting config: webhooks configured + metrics enabled (read-only;
         # this does not touch alerts.py's evaluation logic).
-        hooks = settings_store.get_webhooks()
-        enabled = settings_store.get_enabled()
-        enabled_count = sum(1 for v in enabled.values() if v)
-        a_status = "ok" if hooks else "warn"
+        try:
+            hooks = settings_store.get_webhooks()
+            enabled = settings_store.get_enabled()
+            enabled_count = sum(1 for v in enabled.values() if v)
+            a_status = "ok" if hooks else "warn"
+            a_detail = (f"{len(hooks)} webhook(s) configured, {enabled_count}/{len(enabled)} metrics enabled"
+                        if hooks else "No webhooks configured — alerts have nowhere to send")
+        except Exception:
+            a_status = "down"
+            a_detail = "Unable to read alerting configuration"
         services.append({
             "name": "Alerting",
             "status": a_status,
-            "detail": (f"{len(hooks)} webhook(s) configured, {enabled_count}/{len(enabled)} metrics enabled"
-                       if hooks else "No webhooks configured — alerts have nowhere to send"),
+            "detail": a_detail,
         })
 
         return {"services": services}

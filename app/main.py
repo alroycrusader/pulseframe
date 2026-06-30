@@ -146,6 +146,47 @@ async def history_processes_at(timestamp: float, window_sec: float = 30):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/history/summary")
+async def history_summary(hours: float = 24.0, bucket_sec: int = None):
+    """Peaks/averages/percentiles for CPU, RAM, swap, load, temps, GPU,
+    network throughput, and process count over the given window."""
+    try:
+        return _storage.query_metrics_stats(hours, bucket_sec)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/history/disk/trend")
+async def history_disk_trend(hours: float = 168.0, mount: str = None):
+    """Per-mount capacity trend (growth rate, projected days-to-full)."""
+    try:
+        return _storage.query_disk_trend(hours, mount)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/history/retention")
+async def get_retention_ep():
+    return {
+        "retention_days": _storage.get_retention_days(),
+        "min_days": _storage.MIN_RETENTION_DAYS,
+        "max_days": _storage.MAX_RETENTION_DAYS,
+    }
+
+
+@app.post("/api/history/retention")
+async def set_retention_ep(data: dict = Body(...)):
+    try:
+        days = int(data.get("days"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="days must be an integer")
+    try:
+        applied = _storage.set_retention_days(days)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    return {"retention_days": applied}
+
+
 # ── Settings: Webhooks ──────────────────────────────────────────────────────
 
 @app.get("/api/settings/webhooks")

@@ -32,11 +32,15 @@ Configure webhook URLs (Discord, Slack, or any HTTP endpoint) and set thresholds
 
 ### History API
 
-Query the last N hours of metrics programmatically:
+Query the last N hours of metrics programmatically, including bucketed/downsampled series and aggregate trend stats:
 
 ```
 GET /api/history/metrics?hours=6
 GET /api/history/disk?hours=24&mount=/
+GET /api/history/summary?hours=24          # peaks/averages/percentiles for CPU, RAM, swap, load, temps, GPU, network, processes
+GET /api/history/disk/trend?hours=168      # per-mount capacity growth rate and projected days-to-full
+GET /api/history/retention                 # current retention window (days)
+POST /api/history/retention {"days": 14}    # update retention window (1-365 days); prunes immediately
 ```
 
 ---
@@ -82,7 +86,7 @@ Browser  ──▶  FastAPI (uvicorn)  ──▶  in-memory cache  ──▶  re
                               └──────────────┬──────────────┘
                                              │
                                        SQLite (WAL)
-                                    30-day rolling history
+                              configurable rolling history (default 30 days)
 ```
 
 All metric collection happens in a single daemon thread. API endpoints read from the cache and never block on I/O or sleep calls. The alert loop also reads the same cache rather than performing its own collection.
@@ -98,6 +102,9 @@ All options are set in `.env` (created by `install.sh`, gitignored):
 | `BIND_HOST` | `127.0.0.1` | Host IP to bind the dashboard on |
 | `BIND_PORT` | `8081` | Host port |
 | `CONTAINER_NAME` | `pulseframe` | Docker container name |
+| `HISTORY_RETENTION_DAYS`¹ | `30` | Default history retention window, used only to seed the database on first run. Change it later via `POST /api/history/retention` without restarting. |
+
+¹ Not wired through `docker-compose.yml` by default (it's an app-internal setting, not a host/network option like the others above) — add it under the `environment:` block yourself if you want a non-default first-run seed, or just call `POST /api/history/retention` after starting the container.
 
 ---
 
@@ -118,8 +125,14 @@ All endpoints return JSON. Data is served from the in-memory cache and reflects 
 | `GET /api/processes` | Full process list |
 | `GET /api/sensors` | Temperatures and fans |
 | `GET /api/system` | System info |
-| `GET /api/history/metrics?hours=N` | Historical metric snapshots (default 6 h) |
-| `GET /api/history/disk?hours=N&mount=X` | Historical disk usage, optional mount filter |
+| `GET /api/history/metrics?hours=N&bucket_sec=N` | Historical metric snapshots (default 6 h), optionally downsampled into fixed-size time buckets |
+| `GET /api/history/disk?hours=N&mount=X&bucket_sec=N` | Historical disk usage, optional mount filter and bucketing |
+| `GET /api/history/processes?hours=N` | Peak/average CPU and peak memory per process name over the window |
+| `GET /api/history/processes/at?timestamp=T&window_sec=N` | Top processes around a specific point in time |
+| `GET /api/history/summary?hours=N&bucket_sec=N` | Peaks/averages/percentiles (p50/p95/p99) for CPU, RAM, swap, load, temps, GPU, network throughput, and process count |
+| `GET /api/history/disk/trend?hours=N&mount=X` | Per-mount capacity growth rate (%/day) and projected days-to-full |
+| `GET /api/history/retention` | Current retention window in days |
+| `POST /api/history/retention` | Update the retention window (`{"days": N}`, clamped to 1–365); prunes immediately |
 
 ---
 
@@ -130,9 +143,20 @@ Everything that survives container rebuilds lives in `./data/`:
 | File | Contents |
 |---|---|
 | `data/settings.json` | Webhooks, alert thresholds, messages, enabled flags |
-| `data/metrics.db` | SQLite metrics history (30-day rolling, ~2–3 MB/day) |
+| `data/metrics.db` | SQLite metrics history (configurable retention, default 30 days, ~2–3 MB/day) |
 
 Back up this directory to preserve your configuration and history across server migrations.
+
+---
+
+## Development
+
+Run the backend test suite (storage/history-API logic — retention migrations, pruning, bucketed queries, aggregate stats):
+
+```bash
+pip install pytest
+pytest tests/ -v
+```
 
 ---
 

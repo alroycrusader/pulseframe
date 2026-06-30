@@ -154,7 +154,7 @@ Back up this directory to preserve your configuration and history across server 
 Run the backend test suite (storage/history-API logic — retention migrations, pruning, bucketed queries, aggregate stats):
 
 ```bash
-pip install pytest
+pip install pytest httpx
 pytest tests/ -v
 ```
 

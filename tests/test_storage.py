@@ -43,6 +43,30 @@ def test_init_db_seeds_default_retention(db):
     assert db.get_retention_days() == storage.DEFAULT_RETENTION_DAYS
 
 
+@pytest.mark.parametrize("raw_value", ["not-a-number", "", "-5", "9999"])
+def test_parse_default_retention_days_falls_back_on_bad_env_var(monkeypatch, raw_value):
+    # A malformed HISTORY_RETENTION_DAYS must not crash app startup (the
+    # value is parsed eagerly at import time) — it should fall back to a
+    # safe, in-range default instead of raising.
+    monkeypatch.setenv("HISTORY_RETENTION_DAYS", raw_value)
+    result = storage._parse_default_retention_days()
+    assert storage.MIN_RETENTION_DAYS <= result <= storage.MAX_RETENTION_DAYS
+
+
+def test_parse_default_retention_days_accepts_valid_value(monkeypatch):
+    monkeypatch.setenv("HISTORY_RETENTION_DAYS", "45")
+    assert storage._parse_default_retention_days() == 45
+
+
+def test_concurrent_init_db_does_not_raise_on_config_seed(db):
+    # _m002_create_config_table previously did a check-then-insert that could
+    # race under concurrent init_db() calls (e.g. multiple worker processes).
+    # Re-running init_db repeatedly against the same DB must stay error-free.
+    for _ in range(5):
+        db.init_db()
+    assert db.get_retention_days() == storage.DEFAULT_RETENTION_DAYS
+
+
 def test_init_db_is_idempotent_and_tracks_migrations(db):
     # Calling init_db again must not error or duplicate migration effects.
     db.init_db()
@@ -61,6 +85,17 @@ def test_set_retention_days_persists_and_clamps(db):
     # Out-of-range values are clamped rather than rejected outright.
     assert db.set_retention_days(0) == db.MIN_RETENTION_DAYS
     assert db.set_retention_days(10_000) == db.MAX_RETENTION_DAYS
+
+
+def test_get_retention_days_clamps_out_of_range_stored_value(db):
+    # A row written outside [MIN, MAX] (e.g. seeded via an out-of-range
+    # HISTORY_RETENTION_DAYS before clamping was added on the read path)
+    # must still be clamped on read, not just on write.
+    conn = db._connect()
+    conn.execute("UPDATE _config SET value = '99999' WHERE key = 'retention_days'")
+    conn.commit()
+    conn.close()
+    assert db.get_retention_days() == db.MAX_RETENTION_DAYS
 
 
 def test_existing_database_without_config_table_gets_safe_default(db, tmp_path, monkeypatch):

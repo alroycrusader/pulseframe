@@ -4,12 +4,25 @@ import time as _time
 
 DB_PATH = os.environ.get('DB_PATH', 'data/metrics.db')
 
+MIN_RETENTION_DAYS = 1
+MAX_RETENTION_DAYS = 365
+
+
+def _parse_default_retention_days() -> int:
+    """Parse HISTORY_RETENTION_DAYS, falling back to 30 on anything invalid
+    (missing, non-numeric, or out of range) instead of crashing at import.
+    """
+    try:
+        days = int(float(os.environ.get('HISTORY_RETENTION_DAYS', '30')))
+    except (TypeError, ValueError):
+        return 30
+    return max(MIN_RETENTION_DAYS, min(MAX_RETENTION_DAYS, days))
+
+
 # Default retention window, used only to seed the `_config` table the first
 # time a database is initialized. After that, the persisted value in
 # `_config` is authoritative — see get_retention_days()/set_retention_days().
-DEFAULT_RETENTION_DAYS = int(os.environ.get('HISTORY_RETENTION_DAYS', '30'))
-MIN_RETENTION_DAYS = 1
-MAX_RETENTION_DAYS = 365
+DEFAULT_RETENTION_DAYS = _parse_default_retention_days()
 
 
 def _connect():
@@ -55,12 +68,10 @@ def _m002_create_config_table(conn):
             value TEXT NOT NULL
         )
     """)
-    existing = conn.execute("SELECT 1 FROM _config WHERE key = 'retention_days'").fetchone()
-    if existing is None:
-        conn.execute(
-            "INSERT INTO _config (key, value) VALUES ('retention_days', ?)",
-            (str(DEFAULT_RETENTION_DAYS),)
-        )
+    conn.execute(
+        "INSERT OR IGNORE INTO _config (key, value) VALUES ('retention_days', ?)",
+        (str(DEFAULT_RETENTION_DAYS),)
+    )
 
 
 def init_db():
@@ -236,7 +247,7 @@ def _get_retention_days_conn(conn) -> int:
     if row is None:
         return DEFAULT_RETENTION_DAYS
     try:
-        return max(MIN_RETENTION_DAYS, int(float(row['value'])))
+        return max(MIN_RETENTION_DAYS, min(MAX_RETENTION_DAYS, int(float(row['value']))))
     except (TypeError, ValueError):
         return DEFAULT_RETENTION_DAYS
 

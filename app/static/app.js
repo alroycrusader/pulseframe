@@ -1242,12 +1242,16 @@ async function loadHistoryCharts() {
       fetch('/api/history/metrics?hours=' + r.hours + '&bucket_sec=' + r.bucket),
       fetch('/api/history/disk?hours='    + r.hours + '&bucket_sec=' + r.bucket),
       fetch('/api/history/processes?hours=' + r.hours),
+      fetch('/api/history/summary?hours='   + r.hours + '&bucket_sec=' + r.bucket),
+      fetch('/api/history/disk/trend?hours=' + r.hours),
     ]);
     var metrics = await results[0].json();
     var disk    = await results[1].json();
     var procs   = await results[2].json();
+    var summary = await results[3].json();
+    var diskTrend = await results[4].json();
     if (S.historyFetchId !== myId || S.tab !== 'history') return;
-    renderHistoryCharts(metrics, disk, procs, r.hours);
+    renderHistoryCharts(metrics, disk, procs, r.hours, summary, diskTrend);
   } catch (e) {
     if (S.historyFetchId !== myId) return;
     var el = document.getElementById('hist-charts');
@@ -1255,7 +1259,7 @@ async function loadHistoryCharts() {
   }
 }
 
-function renderHistoryCharts(metrics, disk, procs, hours) {
+function renderHistoryCharts(metrics, disk, procs, hours, summary, diskTrend) {
   var el = document.getElementById('hist-charts');
   if (!el) return;
 
@@ -1279,6 +1283,7 @@ function renderHistoryCharts(metrics, disk, procs, hours) {
     : '';
 
   el.innerHTML =
+    renderTrendSummary(summary, diskTrend, procs) +
     '<div class="card mb-16"><div class="card-title">CPU Usage <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-cpu"></canvas></div></div>' +
     '<div class="card mb-16"><div class="card-title">RAM Usage <span class="hist-click-hint">click any point for processes</span></div><div style="position:relative"><canvas id="hist-ram"></canvas></div></div>' +
     gpuSection +
@@ -1346,6 +1351,56 @@ function renderHistoryCharts(metrics, disk, procs, hours) {
       diskTs, windowSec
     ));
   }
+}
+
+// Compact "Trend Summary" panel: peak/avg/p95 for CPU/RAM/disk/network and
+// the busiest process, for the selected History range. Consumes
+// /api/history/summary and /api/history/disk/trend.
+function renderTrendSummary(summary, diskTrend, procs) {
+  if (!summary || !summary.metrics) return '';
+  var m = summary.metrics;
+
+  var cards = [];
+
+  if (m.cpu_pct && m.cpu_pct.samples) {
+    cards.push(statCard('CPU', pct(m.cpu_pct.avg) + '%', '', 'Peak ' + pct(m.cpu_pct.max) + '% &middot; p95 ' + pct(m.cpu_pct.p95) + '%'));
+  }
+  if (m.ram_pct && m.ram_pct.samples) {
+    cards.push(statCard('RAM', pct(m.ram_pct.avg) + '%', '', 'Peak ' + pct(m.ram_pct.max) + '% &middot; p95 ' + pct(m.ram_pct.p95) + '%'));
+  }
+  if (m.net_rx_bps && m.net_rx_bps.samples) {
+    cards.push(statCard('Network RX', fmtRate(m.net_rx_bps.avg), '', 'Peak ' + fmtRate(m.net_rx_bps.max)));
+  }
+  if (m.net_tx_bps && m.net_tx_bps.samples) {
+    cards.push(statCard('Network TX', fmtRate(m.net_tx_bps.avg), '', 'Peak ' + fmtRate(m.net_tx_bps.max)));
+  }
+  if (m.process_count && m.process_count.samples) {
+    cards.push(statCard('Processes', Math.round(m.process_count.avg), '', 'Peak ' + Math.round(m.process_count.max)));
+  }
+
+  if (diskTrend && diskTrend.length) {
+    var worst = diskTrend.slice().sort(function(a, b) {
+      var da = a.days_to_full == null ? Infinity : a.days_to_full;
+      var db_ = b.days_to_full == null ? Infinity : b.days_to_full;
+      return da - db_;
+    })[0];
+    var diskSub;
+    if (worst.days_to_full != null) {
+      diskSub = '~' + worst.days_to_full.toFixed(0) + 'd to full at this rate (' + esc(worst.mount_point) + ')';
+    } else {
+      diskSub = esc(worst.mount_point) + ' stable or shrinking';
+    }
+    cards.push(statCard('Disk Trend', pct(worst.current_used_percent) + '%', '', diskSub));
+  }
+
+  if (procs && procs.length) {
+    // statCard() escapes `value` internally, so pass the raw name here.
+    cards.push(statCard('Top Process', procs[0].name, '', 'Peak CPU ' + pct(procs[0].peak_cpu_pct, 1) + '%'));
+  }
+
+  if (!cards.length) return '';
+  return '<div class="card mb-16"><div class="card-title">Trend Summary</div>' +
+    '<div class="grid grid-5">' + cards.join('') + '</div></div>';
 }
 
 function renderTopProcsTable(procs) {

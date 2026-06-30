@@ -1,156 +1,161 @@
-PULSEFRAME — DUAL LICENSE
+PULSEFRAME SOURCE-AVAILABLE LICENSE 1.0
 
-Copyright (c) 2024 PulseFrame Contributors
+Copyright (c) 2024-2026 Vimsoft
 
-This software is available under two licenses depending on your use case:
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LICENSE A — FREE FOR PERSONAL & NON-COMMERCIAL USE
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-If you are an individual using this software for personal projects, home
-servers, self-hosted infrastructure, hobby use, research, or education — you
-may use, copy, modify, and distribute this software free of charge under the
-terms of the PolyForm Noncommercial License 1.0.0 below.
-
-Non-commercial organisations (charities, educational institutions, public
-research bodies, government institutions, and public safety organisations) are
-also covered by this free license regardless of funding source.
+PulseFrame is source-available software. It is not "free software" or "open
+source" software in the FSF/OSI sense, because redistribution, resale,
+sublicensing, hosted/SaaS offerings, and embedding are restricted as
+described below.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LICENSE B — COMMERCIAL USE REQUIRES A PAID LICENSE
+SUMMARY (not a substitute for the full terms below)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-If you are a company, business, or organisation using this software as part
-of a commercial operation — including but not limited to:
-
-  • Deploying it on servers operated for commercial gain
-  • Incorporating it into a product or service sold to customers
-  • Using it internally within a for-profit organisation
-  • Offering it as a managed or hosted service
-
-— you must obtain a commercial license before use.
-
-To purchase a commercial license or enquire about pricing, contact:
-  customer.service@vimsoft.org (https://vimsoft.org)
-
-Using this software commercially without a valid commercial license is a
-violation of copyright law.
+  Source-available · Free for personal and internal business use ·
+  Paid license required for redistribution, resale, SaaS, or embedding
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-POLYFORM NONCOMMERCIAL LICENSE 1.0.0
-(Applies to License A above)
+1. GRANT OF RIGHTS — PERMITTED USE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-https://polyformproject.org/licenses/noncommercial/1.0.0
+Subject to the restrictions in Section 2, the licensor grants you a
+worldwide, royalty-free, non-exclusive, non-transferable license to use,
+copy, modify, and self-host the software for any of the following permitted
+purposes:
 
-Acceptance
+  (a) Personal use — personal projects, home servers, self-hosted
+      infrastructure, hobby use, research, and education, without any
+      anticipated commercial application.
 
-In order to get any license under these terms, you must agree to them as both
-strict obligations and conditions to all your licenses.
+  (b) Non-commercial organizations — use by any charitable organization,
+      educational institution, public research organization, public safety
+      or health organization, environmental protection organization, or
+      government institution, regardless of the source of its funding.
 
-Copyright License
+  (c) Internal business use — use by a for-profit company or organization,
+      by its own employees and contractors, solely to monitor and operate
+      infrastructure that is owned, leased, or controlled by that
+      organization.
 
-The licensor grants you a copyright license for the software to do everything
-you might do with the software that would otherwise infringe the licensor's
-copyright in it for any permitted purpose. However, you may only distribute
-the software according to Distribution License and make changes or new works
-based on the software according to Changes and New Works License.
+      Internal business use does NOT include making the software, or any
+      service built on it, available to customers, clients, tenants,
+      managed-service customers, hosted-service users, or any other third
+      party. Providing access to the software (directly or via a dashboard,
+      API, or derived report) to anyone outside your own organization's
+      employees and contractors is not internal business use.
 
-Distribution License
+You may make changes and new works based on the software for any of the
+permitted purposes above, and those changes remain subject to this license.
 
-The licensor grants you an additional copyright license to distribute copies
-of the software. Your license to distribute covers distributing the software
-with changes and new works permitted by Changes and New Works License.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2. RESTRICTIONS — COMMERCIAL LICENSE REQUIRED
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Notices
+Unless you have a separate written commercial license agreement with
+Vimsoft that expressly permits it, you may NOT:
 
-You must ensure that anyone who gets a copy of any part of the software from
-you also gets a copy of these terms or the URL for them above, as well as
-copies of any plain-text lines beginning with "Required Notice:" that the
-licensor provided with the software. Required Notice: Copyright (c) 2024
-PulseFrame Contributors.
+  (a) redistribute the software, in source or compiled form, to any third
+      party;
+  (b) resell the software or any access to it;
+  (c) sublicense the software;
+  (d) offer the software, or any service substantially derived from it, as
+      a hosted, managed, or "Software-as-a-Service" offering to third
+      parties;
+  (e) embed the software into another product, platform, appliance,
+      bundle, or paid service that is provided to third parties;
+  (f) provide the software to third parties as part of any commercial
+      offering; or
+  (g) remove or alter copyright, license, or attribution notices contained
+      in the software.
 
-Changes and New Works License
+A separate paid commercial license is required for any of the activities
+in this section. See COMMERCIAL-LICENSE.md for details on obtaining one.
 
-The licensor grants you an additional copyright license to make changes and
-new works based on the software for any permitted purpose.
+A commercial license, once obtained, grants only the rights expressly
+stated in the written commercial agreement. Purchasing a commercial license
+does not, by itself, imply any redistribution, resale, sublicensing,
+managed-hosting, SaaS, or embedding rights beyond what that agreement
+states.
 
-Patent License
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3. NOTICES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-The licensor grants you a patent license for the software that covers patent
-claims the licensor can license, or becomes able to license, that you would
-infringe by using the software.
+If you distribute the software under a commercial license that permits
+distribution, you must ensure that anyone who receives a copy also receives
+a copy of this license, or the URL where it is published, along with any
+plain-text lines beginning with "Required Notice:" provided by the
+licensor.
 
-Noncommercial Purposes
+Required Notice: Copyright (c) 2024-2026 Vimsoft.
 
-Any noncommercial purpose is a permitted purpose.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4. PATENT LICENSE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Personal Uses
+The licensor grants you a patent license for the software that covers
+patent claims the licensor can license, or becomes able to license, that
+you would infringe by using the software for a permitted purpose under
+Section 1.
 
-Personal use for research, experiment, and testing for the benefit of public
-knowledge, personal study, private entertainment, hobby projects, amateur
-pursuits, or religious observance, without any anticipated commercial
-application, is use for a permitted purpose.
+If you make any written claim that the software infringes or contributes
+to infringement of any patent, your patent license for the software granted
+under these terms ends immediately. If your company makes such a claim,
+your patent license ends immediately for work on behalf of your company.
 
-Noncommercial Organizations
-
-Use by any charitable organization, educational institution, public research
-organization, public safety or health organization, environmental protection
-organization, or government institution is use for a permitted purpose
-regardless of the source of funding or obligations resulting from the funding.
-
-Fair Use
-
-You may have "fair use" rights for the software under the law. These terms do
-not limit them.
-
-No Other Rights
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5. NO OTHER RIGHTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 These terms do not allow you to sublicense or transfer any of your licenses
-to anyone else, or prevent the licensor from granting licenses to anyone else.
-These terms do not imply any other licenses.
+to anyone else, or prevent the licensor from granting licenses to anyone
+else. These terms do not imply any other licenses. You may have "fair use"
+rights for the software under applicable law; these terms do not limit
+them.
 
-Patent Defense
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6. VIOLATIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-If you make any written claim that the software infringes or contributes to
-infringement of any patent, your patent license for the software granted under
-these terms ends immediately. If your company makes such a claim, your patent
-license ends immediately for work on behalf of your company.
+The first time you are notified in writing that you have violated any of
+these terms, or done anything with the software not covered by your
+license, your license can nonetheless continue if you come into full
+compliance with these terms and take practical steps to correct past
+violations within 32 days of receiving notice. Otherwise, all your licenses
+under these terms end immediately.
 
-Violations
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+7. NO LIABILITY / NO WARRANTY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-The first time you are notified in writing that you have violated any of these
-terms, or done anything with the software not covered by your licenses, your
-licenses can nonetheless continue if you come into full compliance with these
-terms, and take practical steps to correct past violations, within 32 days of
-receiving notice. Otherwise, all your licenses end immediately.
+As far as the law allows, the software comes as is, without any warranty
+or condition, and the licensor will not be liable to you for any damages
+arising out of these terms or the use or nature of the software, under any
+kind of legal claim.
 
-No Liability
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+8. DEFINITIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-As far as the law allows, the software comes as is, without any warranty or
-condition, and the licensor will not be liable to you for any damages arising
-out of these terms or the use or nature of the software, under any kind of
-legal claim.
-
-Definitions
-
-The licensor is the individual or entity offering these terms, and the
-software is the software the licensor makes available under these terms.
+The licensor is Vimsoft, the entity offering these terms. The software is
+the PulseFrame software the licensor makes available under these terms.
 
 You refers to the individual or entity agreeing to these terms.
 
-Your company is any legal entity, sole proprietorship, or other kind of
-organization that you work for, plus all organizations that have control over,
-are under the control of, or are under common control with that organization.
-Control means ownership of substantially all the assets of an entity, or the
-power to direct its management and policies by vote, contract, or otherwise.
-Control can be direct or indirect.
+Your organization is any legal entity, sole proprietorship, or other kind
+of organization that you work for, plus all organizations that have
+control over, are under the control of, or are under common control with
+that organization. Control means ownership of substantially all the assets
+of an entity, or the power to direct its management and policies by vote,
+contract, or otherwise. Control can be direct or indirect.
 
-Your licenses are all the licenses granted to you for the software under
-these terms.
+For commercial licensing inquiries, contact:
+  customer.service@vimsoft.org (https://vimsoft.org)
 
-Use means anything you do with the software requiring one of your licenses.
+---
 
-© PolyForm Project Inc. — license text used with permission under the
-PolyForm Project's own open licensing terms.
+This license text was drafted to express a specific business intent
+(source-available, free for personal/internal business use, paid for
+redistribution/resale/SaaS/embedding) and has not yet received review by a
+qualified software/IP lawyer. See COMMERCIAL-LICENSE.md for commercial
+licensing details. Do not treat this document as legal advice.

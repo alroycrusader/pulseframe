@@ -2,7 +2,7 @@
 
 A self-hosted, Docker-deployable Linux server monitoring dashboard with real-time metrics, alert webhooks, and persistent history — designed to run permanently on a server without measurably impacting its workload.
 
-**License:** Free for personal use · [Commercial license required](#license) for businesses
+**License:** Source-available · Free for personal and internal business use · [Paid license required](#license) for redistribution, resale, SaaS, or embedding
 
 By [vimsoft.org](https://vimsoft.org)
 
@@ -138,19 +138,31 @@ Back up this directory to preserve your configuration and history across server 
 
 ## License
 
-**Personal and non-commercial use is free.**
+PulseFrame is **source-available** — it is not "free software" or "open source" in the FSF/OSI sense, because redistribution, resale, SaaS, and embedding are restricted (see below).
 
-This project is licensed under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). You may use, copy, modify, and self-host this software at no cost for:
+**You may use PulseFrame for free for:**
 
-- Personal home servers and hobby projects
-- Research, education, and experimentation
-- Charitable organisations, educational institutions, and government bodies
+- personal use, home servers, and hobby projects
+- research and education
+- non-commercial organisations (charities, educational institutions, public research bodies, government institutions)
+- **internal business use** — running PulseFrame within your own company or organisation to monitor and operate infrastructure that you own, lease, or control
 
-**Commercial use requires a paid license.**
+Internal business use does **not** include making PulseFrame, or a service built on it, available to your customers, clients, tenants, or any other third party.
 
-If you are a company or using this software as part of a commercial operation, you must obtain a commercial license before use. Contact **customer.service@vimsoft.org** to discuss pricing.
+**A paid commercial license is required to:**
+
+- redistribute PulseFrame
+- resell PulseFrame
+- sublicense PulseFrame
+- offer PulseFrame as a hosted, managed, or SaaS service
+- embed PulseFrame into a commercial product or service
+- provide PulseFrame to third parties as part of a paid product, service, appliance, bundle, or platform
+
+Commercial licenses are granted only under a separate written agreement with Vimsoft, and grant only the rights expressly stated in that agreement. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for details, or contact **customer.service@vimsoft.org**.
 
 See [LICENSE](LICENSE) for the full terms.
+
+> This licensing model is custom to this project and has not yet received review by a qualified software/IP lawyer. Treat it as a statement of intent, not legal advice.
 
 ---
 

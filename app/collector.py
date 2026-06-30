@@ -7,6 +7,12 @@ COLLECTION_INTERVAL = 10  # seconds
 _cache: Dict[str, Any] = {}
 _cache_lock = threading.RLock()
 
+# Tracks the health of the background collection loop so the dashboard can
+# surface "is the collector actually running" without any new OS-level
+# capability — just bookkeeping around the loop that already exists.
+_last_collected_at: float = 0.0
+_last_collect_ok: bool = False
+
 
 def _do_collect() -> Dict[str, Any]:
     from app.metrics.overview import get_overview_data
@@ -32,11 +38,13 @@ def _do_collect() -> Dict[str, Any]:
 
 
 def _collect_and_store():
-    global _cache
+    global _cache, _last_collected_at, _last_collect_ok
     try:
         data = _do_collect()
         with _cache_lock:
             _cache = data
+            _last_collected_at = time.time()
+            _last_collect_ok = True
         try:
             from app import storage
             storage.write_snapshot(data)
@@ -44,11 +52,32 @@ def _collect_and_store():
             print(f"[collector] storage write failed: {e}")
     except Exception as e:
         print(f"[collector] collection failed: {e}")
+        with _cache_lock:
+            _last_collect_ok = False
 
 
 def get_cache() -> Dict[str, Any]:
     with _cache_lock:
         return dict(_cache)
+
+
+def get_health() -> Dict[str, Any]:
+    """Lightweight self-health snapshot for the collector loop.
+
+    Used to surface "is the in-memory snapshot fresh" on the dashboard —
+    deliberately built from data already tracked by the loop, no new
+    collection logic.
+    """
+    with _cache_lock:
+        last_at = _last_collected_at
+        ok = _last_collect_ok
+    age = (time.time() - last_at) if last_at else None
+    return {
+        "last_collected_at": last_at or None,
+        "age_sec": age,
+        "ok": ok,
+        "interval_sec": COLLECTION_INTERVAL,
+    }
 
 
 def start():

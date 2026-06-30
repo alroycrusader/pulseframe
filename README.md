@@ -125,6 +125,8 @@ All endpoints return JSON. Data is served from the in-memory cache and reflects 
 | `GET /api/processes` | Full process list |
 | `GET /api/sensors` | Temperatures and fans |
 | `GET /api/system` | System info |
+| `GET /api/health/services` | Health of PulseFrame's own background services (collector, history storage, alerting config) |
+| `GET /api/settings/thresholds` | Current alert warn/crit thresholds — the dashboard renders these as threshold bands on live charts |
 | `GET /api/history/metrics?hours=N&bucket_sec=N` | Historical metric snapshots (default 6 h), optionally downsampled into fixed-size time buckets |
 | `GET /api/history/disk?hours=N&mount=X&bucket_sec=N` | Historical disk usage, optional mount filter and bucketing |
 | `GET /api/history/processes?hours=N` | Peak/average CPU and peak memory per process name over the window |
@@ -151,12 +153,16 @@ Back up this directory to preserve your configuration and history across server 
 
 ## Development
 
-Run the backend test suite (storage/history-API logic — retention migrations, pruning, bucketed queries, aggregate stats):
+Install test dependencies (not bundled in `requirements.txt`, which only lists runtime deps) and run the test suite — storage/history-API logic (retention migrations, pruning, bucketed queries, aggregate stats), the new dashboard/health endpoints, and the collector:
 
 ```bash
 pip install pytest httpx
 pytest tests/ -v
 ```
+
+Tests use the `DB_PATH` environment variable (see `tests/conftest.py`) to point the history DB at a temp file, so running them never touches your real `data/` directory.
+
+The frontend (`app/static/`) is plain JS/CSS served statically — no build step. After editing `app.js` or `styles.css`, bump the `?v=N` query string on the corresponding `<script>`/`<link>` tag in `app/static/index.html` so browsers don't serve a stale cached copy.
 
 ---
 

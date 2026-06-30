@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import os
+import time
 
 import app.settings_store as settings_store
 import app.alerts as alerts
@@ -277,6 +278,77 @@ async def set_enabled_ep(data: dict = Body(...)):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+# ── Service Health (dashboard) ──────────────────────────────────────────────
+# Surfaces the health of PulseFrame's own background services (collector loop,
+# history storage, alert delivery config) using data each module already
+# tracks. This intentionally does not probe OS-level services — see issue #2
+# for that as a follow-up; here we only report on what PulseFrame itself runs.
+
+def _service_status(age_sec, ok, warn_after, down_after):
+    if not ok or age_sec is None:
+        return "down"
+    if age_sec > down_after:
+        return "down"
+    if age_sec > warn_after:
+        return "warn"
+    return "ok"
+
+
+@app.get("/api/health/services")
+async def health_services():
+    try:
+        services = []
+
+        # Metrics collector: is the in-memory snapshot fresh?
+        ch = collector.get_health()
+        interval = ch.get("interval_sec") or 10
+        c_status = _service_status(ch.get("age_sec"), ch.get("ok"), interval * 2, interval * 5)
+        age = ch.get("age_sec")
+        services.append({
+            "name": "Metrics Collector",
+            "status": c_status,
+            "detail": (f"Refreshed {age:.0f}s ago (every {interval:.0f}s)" if age is not None
+                       else "No snapshot collected yet"),
+        })
+
+        # History storage: is SQLite still receiving snapshots?
+        try:
+            recent = _storage.query_metrics(hours=0.05)
+            last_ts = recent[-1]["timestamp"] if recent else None
+        except Exception:
+            last_ts = None
+        s_age = (time.time() - last_ts) if last_ts else None
+        s_status = _service_status(s_age, last_ts is not None, interval * 3, interval * 8)
+        services.append({
+            "name": "History Storage",
+            "status": s_status,
+            "detail": (f"Last snapshot {s_age:.0f}s ago" if s_age is not None
+                       else "No history recorded yet"),
+        })
+
+        # Alerting config: webhooks configured + metrics enabled (read-only;
+        # this does not touch alerts.py's evaluation logic).
+        try:
+            hooks = settings_store.get_webhooks()
+            enabled = settings_store.get_enabled()
+            enabled_count = sum(1 for v in enabled.values() if v)
+            a_status = "ok" if hooks else "warn"
+            a_detail = (f"{len(hooks)} webhook(s) configured, {enabled_count}/{len(enabled)} metrics enabled"
+                        if hooks else "No webhooks configured — alerts have nowhere to send")
+        except Exception:
+            a_status = "down"
+            a_detail = "Unable to read alerting configuration"
+        services.append({
+            "name": "Alerting",
+            "status": a_status,
+            "detail": a_detail,
+        })
+
+        return {"services": services}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

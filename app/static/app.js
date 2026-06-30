@@ -50,6 +50,10 @@ const S = {
   prevNetAt: 0,
   historyRange: 6,
   historyFetchId: 0,
+  thresholds: {},
+  historyOverlay: {},  // cache of fetched /api/history/metrics series, keyed by "field:hours:bucket"
+  fetchError: null,
+  everLoaded: false,
 };
 
 // ============================================================
@@ -132,12 +136,28 @@ function colorClass(v, warn, crit) {
   return 'color-cyan';
 }
 
+// Like colorClass, but keeps a caller-supplied base color when under threshold
+// (used where the "normal" color isn't cyan, e.g. TX rate is purple).
+function colorClassBase(v, warn, crit, base) {
+  if (v >= crit) return 'color-pink';
+  if (v >= warn) return 'color-yellow';
+  return base || 'color-cyan';
+}
+
 function barColor(v, warn, crit) {
   warn = warn == null ? 80 : warn;
   crit = crit == null ? 90 : crit;
   if (v >= crit) return 'var(--pink)';
   if (v >= warn) return 'var(--yellow)';
   return 'var(--cyan)';
+}
+
+// Reads a value from the live alert thresholds (fetched from
+// /api/settings/thresholds) with a fallback for use before they've loaded
+// or for keys with no matching threshold setting.
+function th(key, fallback) {
+  var v = S.thresholds && S.thresholds[key];
+  return (v != null && !isNaN(v)) ? v : fallback;
 }
 
 // ============================================================
@@ -384,6 +404,47 @@ function pctChartCfg(labels, datasets) {
   };
 }
 
+// Draws dashed warn/crit threshold lines on a line chart's plot area,
+// sourced from the stored alert thresholds (read-only — see
+// /api/settings/thresholds). No bundler/annotation plugin required: this is
+// a tiny self-contained Chart.js plugin.
+function thresholdBandsPlugin(warnVal, critVal) {
+  return {
+    id: 'thresholdBands',
+    afterDraw: function(chart) {
+      var yScale = chart.scales && chart.scales.y;
+      if (!yScale) return;
+      var area = chart.chartArea;
+      var ctx = chart.ctx;
+      function line(val, color) {
+        if (val == null) return;
+        var y = yScale.getPixelForValue(val);
+        if (y < area.top - 1 || y > area.bottom + 1) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.setLineDash([4, 3]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(area.left, y);
+        ctx.lineTo(area.right, y);
+        ctx.stroke();
+        ctx.restore();
+      }
+      line(warnVal, 'rgba(255, 214, 0, 0.55)');
+      line(critVal, 'rgba(255, 0, 153, 0.6)');
+    },
+  };
+}
+
+// pctChartCfg + optional warn/crit threshold band overlay.
+function pctChartCfgBanded(labels, datasets, warnVal, critVal) {
+  var cfg = pctChartCfg(labels, datasets);
+  if (warnVal != null || critVal != null) {
+    cfg.plugins = [thresholdBandsPlugin(warnVal, critVal)];
+  }
+  return cfg;
+}
+
 function barChartCfg(labels, data, color) {
   return {
     type: 'bar',
@@ -490,6 +551,9 @@ function renderLoading() {
 function renderError(msg) {
   return '<div class="error-box">&#9888; ' + esc(msg) + '</div>';
 }
+function renderEmpty(msg) {
+  return '<div class="empty-box">' + esc(msg) + '</div>';
+}
 
 /* ---------- OVERVIEW ---------- */
 function renderOverview(d) {
@@ -507,19 +571,23 @@ function renderOverview(d) {
   var diskVal = parseFloat(disk.used_percent) || 0;
   var uptimeStr = (up.days || 0) + 'd ' + (up.hours || 0) + 'h ' + (up.minutes || 0) + 'm';
 
+  var cpuWarn  = th('cpu_warn', 80),  cpuCrit  = th('cpu_crit', 90);
+  var ramWarn  = th('ram_warn', 85),  ramCrit  = th('ram_crit', 95);
+  var diskWarn = th('storage_warn', 80), diskCrit = th('storage_crit', 90);
+
   var alerts = [];
-  if (cpuVal  >= 90) alerts.push(alert_('CPU critical: '  + pct(cpuVal)  + '%', 'crit'));
-  else if (cpuVal  >= 80) alerts.push(alert_('CPU high: '   + pct(cpuVal)  + '%', 'warn'));
-  if (ramVal  >= 95) alerts.push(alert_('RAM critical: '  + pct(ramVal)  + '%', 'crit'));
-  else if (ramVal  >= 85) alerts.push(alert_('RAM high: '   + pct(ramVal)  + '%', 'warn'));
-  if (diskVal >= 90) alerts.push(alert_('Disk critical: ' + pct(diskVal) + '%', 'crit'));
-  else if (diskVal >= 80) alerts.push(alert_('Disk high: '  + pct(diskVal) + '%', 'warn'));
+  if (cpuVal  >= cpuCrit)  alerts.push(alert_('CPU critical: '  + pct(cpuVal)  + '%', 'crit'));
+  else if (cpuVal  >= cpuWarn)  alerts.push(alert_('CPU high: '   + pct(cpuVal)  + '%', 'warn'));
+  if (ramVal  >= ramCrit)  alerts.push(alert_('RAM critical: '  + pct(ramVal)  + '%', 'crit'));
+  else if (ramVal  >= ramWarn)  alerts.push(alert_('RAM high: '   + pct(ramVal)  + '%', 'warn'));
+  if (diskVal >= diskCrit) alerts.push(alert_('Disk critical: ' + pct(diskVal) + '%', 'crit'));
+  else if (diskVal >= diskWarn) alerts.push(alert_('Disk high: '  + pct(diskVal) + '%', 'warn'));
 
   return alerts.join('') +
     '<div class="grid grid-4">' +
-      statCard('CPU Usage',     pct(d.cpu_usage),       '%',  'Load: ' + (load['1min']||0).toFixed(2) + ' / ' + (load['5min']||0).toFixed(2) + ' / ' + (load['15min']||0).toFixed(2), d.cpu_usage,       80, 90) +
-      statCard('RAM Usage',     pct(mem.used_percent),  '%',  (mem.used_mb||0).toLocaleString() + ' MB / ' + (mem.total_mb||0).toLocaleString() + ' MB', mem.used_percent,  85, 95) +
-      statCard('Disk Usage',    String(diskVal),         '%',  esc(disk.used||'?') + ' / ' + esc(disk.size||'?'), disk.used_percent, 80, 90) +
+      statCard('CPU Usage',     pct(d.cpu_usage),       '%',  'Load: ' + (load['1min']||0).toFixed(2) + ' / ' + (load['5min']||0).toFixed(2) + ' / ' + (load['15min']||0).toFixed(2), d.cpu_usage,       cpuWarn, cpuCrit) +
+      statCard('RAM Usage',     pct(mem.used_percent),  '%',  (mem.used_mb||0).toLocaleString() + ' MB / ' + (mem.total_mb||0).toLocaleString() + ' MB', mem.used_percent,  ramWarn, ramCrit) +
+      statCard('Disk Usage',    String(diskVal),         '%',  esc(disk.used||'?') + ' / ' + esc(disk.size||'?'), disk.used_percent, diskWarn, diskCrit) +
       statCard('Processes',     String(d.process_count||0), '', 'Uptime: ' + uptimeStr, null) +
     '</div>' +
     '<div class="grid grid-2 mt-16">' +
@@ -538,7 +606,35 @@ function renderOverview(d) {
         kv(hint('15 min', LOAD_AVG_HINT), (load['15min']||0).toFixed(2)) +
         kv('Processes', String(d.process_count||0)) +
       '</div>' +
-    '</div>';
+    '</div>' +
+    renderServiceHealth(S.data.health);
+}
+
+/* ---------- SERVICE HEALTH ---------- */
+// Surfaces PulseFrame's own background services (collector loop, history
+// storage, alert delivery config) via /api/health/services. This reports on
+// the app's own services rather than arbitrary OS services — see PR
+// description for that as a deferred follow-up.
+var SERVICE_STATUS_DOT = { ok: 'color-green', warn: 'color-yellow', down: 'color-pink' };
+
+function renderServiceHealth(services) {
+  if (services === false) {
+    return '<div class="card mt-16"><div class="card-title">Service Health</div>' +
+      '<div class="muted-text">Unable to load service health</div></div>';
+  }
+  if (!services) {
+    return '<div class="card mt-16"><div class="card-title">Service Health</div>' +
+      '<div class="muted-text">Loading&hellip;</div></div>';
+  }
+  if (!services.length) return '';
+  var rows = services.map(function(s) {
+    var cls = SERVICE_STATUS_DOT[s.status] || 'color-cyan';
+    return kv(
+      '<span class="' + cls + '">&#9679;</span> ' + esc(s.name),
+      '<span class="muted-text">' + esc(s.detail || '') + '</span>'
+    );
+  }).join('');
+  return '<div class="card mt-16"><div class="card-title">Service Health</div>' + rows + '</div>';
 }
 
 /* ---------- CPU ---------- */
@@ -552,8 +648,11 @@ function renderCpu(d) {
   var cores = d.per_core_usage   || [];
   var procs = d.top_processes    || [];
 
+  var cpuWarn  = th('cpu_warn', 80),      cpuCrit  = th('cpu_crit', 90);
+  var tempWarn = th('cpu_temp_warn', 70), tempCrit = th('cpu_temp_crit', 85);
+
   var tempVal   = parseFloat(temp.average) || 0;
-  var tempClass = tempVal >= 85 ? 'color-pink' : tempVal >= 70 ? 'color-yellow' : 'color-green';
+  var tempClass = tempVal >= tempCrit ? 'color-pink' : tempVal >= tempWarn ? 'color-yellow' : 'color-green';
 
   var procRows = procs.map(function(p) {
     return trow([
@@ -569,7 +668,7 @@ function renderCpu(d) {
   }).join('');
 
   return '<div class="grid grid-4">' +
-      statCard('Total CPU',     pct(d.total_cpu), '%', (d.logical_cores||0) + ' logical / ' + (d.physical_cores||0) + ' physical', d.total_cpu) +
+      statCard('Total CPU',     pct(d.total_cpu), '%', (d.logical_cores||0) + ' logical / ' + (d.physical_cores||0) + ' physical', d.total_cpu, cpuWarn, cpuCrit) +
       '<div class="card stat-card"><div class="card-title">CPU Model</div><div class="cpu-model">' + esc(d.cpu_model||'Unknown') + '</div></div>' +
       '<div class="card stat-card"><div class="card-title">Frequency (MHz)</div>' +
         kv('Current', '<span class="color-cyan">' + (freq.current||0).toFixed(0) + '</span>') +
@@ -621,6 +720,9 @@ function renderRam(d) {
   var swap  = d.swap_info || [];
   var procs = d.top_processes || [];
 
+  var ramWarn  = th('ram_warn', 85),  ramCrit  = th('ram_crit', 95);
+  var swapWarn = th('swap_warn', 50), swapCrit = th('swap_crit', 80);
+
   var swapTotal = swap.reduce(function(a, s) { return a + (s.size_mb||0); }, 0);
   var swapUsed  = swap.reduce(function(a, s) { return a + (s.used_mb||0); }, 0);
   var swapPct   = swapTotal > 0 ? (swapUsed / swapTotal) * 100 : 0;
@@ -636,14 +738,14 @@ function renderRam(d) {
     ]);
   }).join('');
 
-  var usedCls = colorClass(parseFloat(pct(r.used_percent)), 85, 95);
+  var usedCls = colorClass(parseFloat(pct(r.used_percent)), ramWarn, ramCrit);
   return '<div class="card stat-card stat-card-wide mb-16">' +
       '<div class="stat-card-wide-left">' +
         '<div class="card-title">RAM Used</div>' +
         '<div class="stat-value ' + usedCls + '">' + pct(r.used_percent) + '<span class="stat-unit">%</span></div>' +
       '</div>' +
       '<div class="stat-card-wide-right">' +
-        progressBar(r.used_percent, 85, 95) +
+        progressBar(r.used_percent, ramWarn, ramCrit) +
         '<div class="stat-sub">' + (r.used_mb||0).toLocaleString() + ' MB used &nbsp;·&nbsp; ' + (r.total_mb||0).toLocaleString() + ' MB total</div>' +
       '</div>' +
     '</div>' +
@@ -652,7 +754,7 @@ function renderRam(d) {
       statCard('Total RAM',  fmtBytes(totalBytes), '', 'Installed physical memory', null) +
       statCard(hint('Available', 'Memory available for new processes — includes reclaimable cache. More useful than "Free" as a health indicator.'), fmtBytes((r.available_mb||0)*1048576), '', 'Free: ' + fmtBytes((r.free_mb||0)*1048576), null) +
       statCard(hint('Cache+Buf', 'Memory the OS uses to cache disk reads and buffer writes. It speeds up file access but is instantly reclaimed when a process needs RAM — it is not "wasted" memory.'), fmtBytes(((r.cached_mb||0)+(r.buffers_mb||0))*1048576), '', 'Cached: ' + fmtBytes((r.cached_mb||0)*1048576), null) +
-      statCard(hint('Swap', 'Swap space — disk used as overflow when RAM fills up. Much slower than RAM; heavy swap usage usually means the system needs more memory.'), swapTotal > 0 ? pct(swapPct) + '%' : 'None', '', swapTotal > 0 ? swapUsed.toLocaleString() + ' / ' + swapTotal.toLocaleString() + ' MB' : 'No swap configured', swapTotal > 0 ? swapPct : null) +
+      statCard(hint('Swap', 'Swap space — disk used as overflow when RAM fills up. Much slower than RAM; heavy swap usage usually means the system needs more memory.'), swapTotal > 0 ? pct(swapPct) + '%' : 'None', '', swapTotal > 0 ? swapUsed.toLocaleString() + ' / ' + swapTotal.toLocaleString() + ' MB' : 'No swap configured', swapTotal > 0 ? swapPct : null, swapWarn, swapCrit) +
     '</div>' +
 
     '<div class="card mt-16"><div class="card-title">RAM Usage History (' + S.history.ram.length + ' samples)</div>' +
@@ -661,7 +763,7 @@ function renderRam(d) {
 
     '<div class="card mt-16"><div class="card-title">Memory Breakdown</div>' +
       '<div class="mem-breakdown">' +
-        '<div class="mem-bar-row"><span class="mem-label">Used</span>'     + progressBar(r.used_percent,                                     85, 95)   + '<span class="mem-val">' + (r.used_mb||0).toLocaleString() + ' MB</span></div>' +
+        '<div class="mem-bar-row"><span class="mem-label">Used</span>'     + progressBar(r.used_percent,                                     ramWarn, ramCrit)   + '<span class="mem-val">' + (r.used_mb||0).toLocaleString() + ' MB</span></div>' +
         '<div class="mem-bar-row"><span class="mem-label">' + hint('Cached',  'Disk cache — memory the OS uses to speed up file reads. Returned to processes immediately if needed.') + '</span>'   + progressBar((r.cached_mb||0) /(r.total_mb||1)*100,  200, 200) + '<span class="mem-val">' + (r.cached_mb||0).toLocaleString() + ' MB</span></div>' +
         '<div class="mem-bar-row"><span class="mem-label">' + hint('Buffers', 'I/O buffers — small memory pools for block-device read/write operations. Also reclaimable on demand.') + '</span>'  + progressBar((r.buffers_mb||0)/(r.total_mb||1)*100, 200, 200) + '<span class="mem-val">' + (r.buffers_mb||0).toLocaleString() + ' MB</span></div>' +
         '<div class="mem-bar-row"><span class="mem-label">Free</span>'     + progressBar((r.free_mb||0)   /(r.total_mb||1)*100,             200, 200) + '<span class="mem-val">' + (r.free_mb||0).toLocaleString() + ' MB</span></div>' +
@@ -689,7 +791,10 @@ function renderGpu(d) {
   }
 
   var gpus = d.gpus || [];
-  if (!gpus.length) return '<div class="card"><p class="muted-text">No GPU data returned.</p></div>';
+  if (!gpus.length) return renderEmpty('No GPU data returned.');
+
+  var utilWarn = th('gpu_util_warn', 80), utilCrit = th('gpu_util_crit', 90);
+  var tempWarn = th('gpu_temp_warn', 75), tempCrit = th('gpu_temp_crit', 85);
 
   // Summary stat cards across all GPUs
   var totalVramMb  = gpus.reduce(function(a, g) { return a + (g.memory_total_mb||0); }, 0);
@@ -701,9 +806,9 @@ function renderGpu(d) {
   var totalVramPct = totalVramMb > 0 ? (usedVramMb / totalVramMb) * 100 : 0;
 
   var summary = '<div class="grid grid-4">' +
-    statCard('Avg GPU Util', pct(avgUtil),        '%',   gpus.length + ' GPU' + (gpus.length > 1 ? 's' : ''), avgUtil) +
+    statCard('Avg GPU Util', pct(avgUtil),        '%',   gpus.length + ' GPU' + (gpus.length > 1 ? 's' : ''), avgUtil, utilWarn, utilCrit) +
     statCard('VRAM Used',    pct(totalVramPct),   '%',   usedVramMb.toLocaleString() + ' / ' + totalVramMb.toLocaleString() + ' MB', totalVramPct) +
-    statCard('Max Temp',     String(maxTemp),     '°C', 'Hottest GPU', maxTemp, 70, 85) +
+    statCard('Max Temp',     String(maxTemp),     '°C', 'Hottest GPU', maxTemp, tempWarn, tempCrit) +
     '<div class="card stat-card"><div class="card-title">Total Power</div>' +
       '<div class="stat-value color-cyan">' + totalPower.toFixed(0) + '<span class="stat-unit">W</span></div>' +
       '<div class="stat-sub">Limit: ' + totalPowerLim.toFixed(0) + ' W</div>' +
@@ -719,9 +824,9 @@ function renderGpu(d) {
         '<div class="chart-container"><canvas id="chart-gpu-history-' + idx + '"></canvas></div>' +
       '</div>' +
       '<div class="grid grid-4 mt-16">' +
-        statCard('Utilization',  pct(g.utilization), '%',   '', g.utilization) +
+        statCard('Utilization',  pct(g.utilization), '%',   '', g.utilization, utilWarn, utilCrit) +
         statCard('VRAM Used',    pct(memPct),         '%',   (g.memory_used_mb||0).toLocaleString() + ' / ' + (g.memory_total_mb||0).toLocaleString() + ' MB', memPct) +
-        statCard('Temperature',  String(g.temperature||0), '°C', 'Fan: ' + (g.fan_speed||0) + '%', g.temperature||0, 70, 85) +
+        statCard('Temperature',  String(g.temperature||0), '°C', 'Fan: ' + (g.fan_speed||0) + '%', g.temperature||0, tempWarn, tempCrit) +
         statCard('Power Draw',   (g.power_draw_watts||0).toFixed(1), 'W', 'Limit: ' + (g.power_limit_watts||0).toFixed(0) + ' W', null) +
       '</div>' +
       '<div class="card mt-16">' +
@@ -740,20 +845,21 @@ function renderStorage(d) {
   if (d.error) return renderError(d.error);
 
   var disks = d.disk_usage || [];
+  var warn = th('storage_warn', 80), crit = th('storage_crit', 90);
 
   function diskRow(dk, realOnly) {
     var fs = dk.filesystem || '';
     if (realOnly && (fs.startsWith('tmpfs') || fs.startsWith('overlay') || fs.startsWith('shm') || fs.startsWith('devtmpfs') || fs.startsWith('udev'))) return '';
     var p = parseFloat(dk.used_percent) || 0;
-    var rowCls = p >= 90 ? 'row-crit' : p >= 80 ? 'row-warn' : '';
-    var pctCls = p >= 90 ? 'color-pink' : p >= 80 ? 'color-yellow' : '';
+    var rowCls = p >= crit ? 'row-crit' : p >= warn ? 'row-warn' : '';
+    var pctCls = p >= crit ? 'color-pink' : p >= warn ? 'color-yellow' : '';
     return '<tr class="' + rowCls + '">' +
       '<td>' + hint(esc(fs), fsHint(fs)) + '</td>' +
       '<td>' + esc(dk.size||'') + '</td>' +
       '<td>' + esc(dk.used||'') + '</td>' +
       '<td>' + esc(dk.available||'') + '</td>' +
       '<td><div style="display:flex;align-items:center;gap:8px;min-width:120px">' +
-        '<div class="progress" style="flex:1;margin:0"><div class="progress-fill" style="width:' + p + '%;background:' + barColor(p) + '"></div></div>' +
+        '<div class="progress" style="flex:1;margin:0"><div class="progress-fill" style="width:' + p + '%;background:' + barColor(p, warn, crit) + '"></div></div>' +
         '<span class="' + pctCls + '">' + p + '%</span>' +
       '</div></td>' +
       '<td>' + esc(dk.mount_point||'') + '</td>' +
@@ -790,6 +896,13 @@ function renderNetwork(d) {
   var lastRx = S.history.netRx.length ? S.history.netRx[S.history.netRx.length - 1] : 0;
   var lastTx = S.history.netTx.length ? S.history.netTx[S.history.netTx.length - 1] : 0;
 
+  // Thresholds are stored in Mbps; rates here are bytes/sec.
+  var rxWarn = th('net_rx_warn_mbps', 100), rxCrit = th('net_rx_crit_mbps', 500);
+  var txWarn = th('net_tx_warn_mbps', 100), txCrit = th('net_tx_crit_mbps', 500);
+  var rxMbps = (lastRx * 8) / 1e6, txMbps = (lastTx * 8) / 1e6;
+  var rxCls = colorClassBase(rxMbps, rxWarn, rxCrit, 'color-cyan');
+  var txCls = colorClassBase(txMbps, txWarn, txCrit, 'color-purple');
+
   var ifaceCards = ifaces.map(function(i) {
     return '<div class="card">' +
       '<div class="card-title">' + hint(esc(i.interface), ifaceHint(i.interface)) + '</div>' +
@@ -810,10 +923,10 @@ function renderNetwork(d) {
 
   return '<div class="grid grid-2 mb-16">' +
       '<div class="card stat-card"><div class="card-title">RX Rate</div>' +
-        '<div class="stat-value color-cyan">' + fmtRate(lastRx) + '</div>' +
+        '<div class="stat-value ' + rxCls + '">' + fmtRate(lastRx) + '</div>' +
       '</div>' +
       '<div class="card stat-card"><div class="card-title">TX Rate</div>' +
-        '<div class="stat-value color-purple">' + fmtRate(lastTx) + '</div>' +
+        '<div class="stat-value ' + txCls + '">' + fmtRate(lastTx) + '</div>' +
       '</div>' +
     '</div>' +
 
@@ -822,7 +935,7 @@ function renderNetwork(d) {
     '</div>' +
 
     '<div class="grid grid-3 mb-16">' +
-      (ifaceCards || '<div class="card"><p class="muted-text">No interfaces</p></div>') +
+      (ifaceCards || renderEmpty('No interfaces detected.')) +
     '</div>' +
 
     '<div class="card"><div class="card-title">Listening Sockets / Connections (first 30)</div>' +
@@ -1017,10 +1130,7 @@ function renderSensors(d) {
   var powers = d.power_supplies || [];
 
   if (!temps.length && !fans.length && !powers.length) {
-    return '<div class="card">' +
-      '<p class="muted-text">No sensor data available.</p>' +
-      '<p class="muted-text mt-8">Install <code>lm-sensors</code> on the host and run <code>sensors-detect</code>, then rebuild the container.</p>' +
-    '</div>';
+    return renderEmpty('No sensor data available. Install lm-sensors on the host and run sensors-detect, then rebuild the container.');
   }
 
   var tempCards = temps.map(function(t) {
@@ -1292,8 +1402,8 @@ function renderHistoryCharts(metrics, disk, procs, hours, summary, diskTrend) {
     diskSection +
     renderTopProcsTable(procs);
 
-  mkChart('hist-cpu',  _withClick(pctChartCfg(ts, [mkDs('CPU %', metrics.map(function(r) { return r.cpu_pct; }), '#00e5ff')]), metricTs, windowSec));
-  mkChart('hist-ram',  _withClick(pctChartCfg(ts, [mkDs('RAM %', metrics.map(function(r) { return r.ram_pct; }), '#bb00ff')]), metricTs, windowSec));
+  mkChart('hist-cpu',  _withClick(pctChartCfgBanded(ts, [mkDs('CPU %', metrics.map(function(r) { return r.cpu_pct; }), '#00e5ff')], th('cpu_warn', 80), th('cpu_crit', 90)), metricTs, windowSec));
+  mkChart('hist-ram',  _withClick(pctChartCfgBanded(ts, [mkDs('RAM %', metrics.map(function(r) { return r.ram_pct; }), '#bb00ff')], th('ram_warn', 85), th('ram_crit', 95)), metricTs, windowSec));
 
   if (hasGpu) {
     var gpuRows = metrics.filter(function(r) { return r.gpu_pct != null; });
@@ -1301,7 +1411,7 @@ function renderHistoryCharts(metrics, disk, procs, hours, summary, diskTrend) {
     var gpuRawTs = gpuRows.map(function(r) { return r.timestamp; });
     var gpuDs   = mkDs('GPU %', gpuRows.map(function(r) { return r.gpu_pct; }), '#00ff41');
     gpuDs.spanGaps = true;
-    var gpuCfg  = pctChartCfg(gpuTs, [gpuDs]);
+    var gpuCfg  = pctChartCfgBanded(gpuTs, [gpuDs], th('gpu_util_warn', 80), th('gpu_util_crit', 90));
     delete gpuCfg.options.scales.y.max;
     gpuCfg.options.scales.y.suggestedMax = 10;
     mkChart('hist-gpu', _withClick(gpuCfg, gpuRawTs, windowSec));
@@ -1422,13 +1532,80 @@ function renderTopProcsTable(procs) {
 }
 
 // ============================================================
+// HISTORICAL OVERLAY (persisted history layered onto live charts)
+// ============================================================
+// Fetches a recent slice of persisted history (from /api/history/metrics,
+// the same endpoint the History tab uses) for one numeric field, caching it
+// briefly so every 5s refresh tick doesn't re-fetch.
+function fetchHistOverlay(field, hours, bucketSec) {
+  var key = field + ':' + hours + ':' + bucketSec;
+  var cached = S.historyOverlay[key];
+  var now = Date.now();
+  if (cached && (now - cached.fetchedAt) < 50000) return Promise.resolve(cached);
+  return fetch('/api/history/metrics?hours=' + hours + '&bucket_sec=' + bucketSec)
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(rows) {
+      var entry = {
+        fetchedAt: now,
+        labels: rows.map(function(r) { return fmtHistTs(r.timestamp, hours); }),
+        values: rows.map(function(r) { return r[field] != null ? r[field] : null; }),
+      };
+      S.historyOverlay[key] = entry;
+      return entry;
+    })
+    .catch(function() { return null; });
+}
+
+// Re-draws an already-rendered live chart (built by mkChart) with persisted
+// history prepended as a second, dashed "Last 1h" dataset so the live
+// session samples (right-hand side) get historical context (left-hand
+// side) on the same canvas. Best-effort: silently does nothing if the
+// canvas/chart is gone (e.g. user switched tabs before the fetch resolved)
+// or if there's no history yet.
+//
+// overlayGen[canvasId] guards against a fast tab-away-and-back: if the
+// user leaves and returns to the tab before this fetch resolves, initCharts
+// runs again and calls this a second time for the same canvasId with fresh
+// live data. Without the generation check, the first (stale) call's .then
+// would still fire and briefly overwrite the second call's correct chart
+// with its outdated liveLabels/liveValues closure.
+var overlayGen = {};
+function applyHistoricalOverlay(canvasId, liveLabels, liveValues, liveLabel, liveColor, field, warnVal, critVal) {
+  var gen = (overlayGen[canvasId] = (overlayGen[canvasId] || 0) + 1);
+  fetchHistOverlay(field, 1, 60).then(function(overlay) {
+    if (overlayGen[canvasId] !== gen) return;
+    if (!overlay || !overlay.values.length) return;
+    var chart = S.charts[canvasId];
+    var el = document.getElementById(canvasId);
+    if (!chart || !el) return;
+
+    var histValues = overlay.values;
+    var nulledLive = liveLabels.map(function() { return null; });
+    var nulledHist = histValues.map(function() { return null; });
+
+    var histDs = mkDs('Last 1h', histValues.concat(nulledLive), '#5a5f6b', false);
+    histDs.borderDash = [3, 3];
+    histDs.pointRadius = 0;
+    histDs.spanGaps = true;
+
+    var liveDs = mkDs(liveLabel, nulledHist.concat(liveValues), liveColor);
+
+    var cfg = pctChartCfgBanded(overlay.labels.concat(liveLabels), [histDs, liveDs], warnVal, critVal);
+    chart.destroy();
+    S.charts[canvasId] = new Chart(el, cfg);
+  });
+}
+
+// ============================================================
 // CHART INITIALIZERS (run after innerHTML is set)
 // ============================================================
 function initCharts(tabId) {
   var h = S.history;
 
   if (tabId === 'cpu') {
-    mkChart('chart-cpu-history', pctChartCfg(h.ts, [mkDs('CPU %', h.cpu, '#00e5ff')]));
+    var cpuWarn = th('cpu_warn', 80), cpuCrit = th('cpu_crit', 90);
+    mkChart('chart-cpu-history', pctChartCfgBanded(h.ts, [mkDs('CPU %', h.cpu, '#00e5ff')], cpuWarn, cpuCrit));
+    applyHistoricalOverlay('chart-cpu-history', h.ts.slice(), h.cpu.slice(), 'Live', '#00e5ff', 'cpu_pct', cpuWarn, cpuCrit);
     var cores = (S.data.cpu && S.data.cpu.per_core_usage) || [];
     if (cores.length) {
       mkChart('chart-cpu-cores', barChartCfg(
@@ -1440,13 +1617,16 @@ function initCharts(tabId) {
   }
 
   if (tabId === 'ram') {
-    mkChart('chart-ram-history', pctChartCfg(h.ts, [mkDs('RAM %', h.ram, '#bb00ff')]));
+    var ramWarn = th('ram_warn', 85), ramCrit = th('ram_crit', 95);
+    mkChart('chart-ram-history', pctChartCfgBanded(h.ts, [mkDs('RAM %', h.ram, '#bb00ff')], ramWarn, ramCrit));
+    applyHistoricalOverlay('chart-ram-history', h.ts.slice(), h.ram.slice(), 'Live', '#bb00ff', 'ram_pct', ramWarn, ramCrit);
   }
 
   if (tabId === 'gpu' && S.data.gpu && S.data.gpu.nvidia_available) {
+    var gpuUtilWarn = th('gpu_util_warn', 80), gpuUtilCrit = th('gpu_util_crit', 90);
     var gpus = S.data.gpu.gpus || [];
     gpus.forEach(function(g, i) {
-      var cfg = pctChartCfg(h.ts, [mkDs('GPU ' + i + ' %', S.history.gpus[i] || [], '#00ff41')]);
+      var cfg = pctChartCfgBanded(h.ts, [mkDs('GPU ' + i + ' %', S.history.gpus[i] || [], '#00ff41')], gpuUtilWarn, gpuUtilCrit);
       // Remove hard max so 0% idle lines are visible; always show at least 0–10% range
       delete cfg.options.scales.y.max;
       cfg.options.scales.y.suggestedMax = 10;
@@ -1513,12 +1693,39 @@ function switchProcTab(id) {
 // ============================================================
 // DATA FETCHING
 // ============================================================
+// Fetches the live alert thresholds so cards/charts can render real warn/crit
+// bands instead of hard-coded numbers. Read-only — never writes thresholds.
+function fetchThresholds() {
+  return fetch('/api/settings/thresholds')
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) { S.thresholds = data || {}; })
+    .catch(function(e) { console.error('Failed to load thresholds:', e); });
+}
+
 async function fetchAll() {
+  var healthPromise = fetch('/api/health/services').catch(function() { return null; });
   try {
     var resp = await fetch('/api/all');
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     var all = await resp.json();
     S.data = all;
+    S.fetchError = null;
+    S.everLoaded = true;
+
+    // Service health is best-effort — a failure here shouldn't break the
+    // rest of the dashboard. On failure, mark it explicitly (`false`) rather
+    // than leaving it unset, since S.data is replaced wholesale every cycle —
+    // otherwise a failing endpoint would leave the card stuck on "Loading…"
+    // forever instead of showing an error.
+    try {
+      var hResp = await healthPromise;
+      if (hResp && hResp.ok) {
+        var hBody = await hResp.json();
+        S.data.health = hBody.services || [];
+      } else {
+        S.data.health = false;
+      }
+    } catch (eh) { S.data.health = false; }
 
     // Extract key metrics for history
     var cpuPct = parseFloat(
@@ -1554,8 +1761,15 @@ async function fetchAll() {
     if (S.tab !== 'history') renderTab(S.tab);
   } catch (e) {
     console.error('Fetch error:', e);
+    S.fetchError = e.message;
     var luEl = document.getElementById('last-updated');
     if (luEl) luEl.textContent = 'Error: ' + e.message;
+    // If we've never loaded data successfully, surface the failure in the
+    // active panel instead of leaving it stuck on "Loading…" forever.
+    if (!S.everLoaded && S.view === 'monitor' && S.tab !== 'history') {
+      var panel = document.getElementById('panel-' + S.tab);
+      if (panel) panel.innerHTML = renderError('Could not reach the PulseFrame backend: ' + e.message);
+    }
   }
 }
 
@@ -1650,6 +1864,7 @@ function init() {
 
   // Show first tab, load data
   switchTab('overview');
+  fetchThresholds().then(function() { if (S.view === 'monitor') renderTab(S.tab); });
   fetchAll();
   startTimer();
 }
@@ -1662,7 +1877,8 @@ document.addEventListener('DOMContentLoaded', init);
 S.view         = 'monitor';
 S.settingsTab  = 'webhooks';
 S.webhooks     = [];
-S.thresholds   = {};
+// S.thresholds lives in the main STATE block — it's shared with the live
+// dashboard's threshold bands/colors, not just the settings UI.
 S.messages     = {};
 S.enabled      = {};
 S.expandedMsgs = {};
@@ -1690,7 +1906,9 @@ function hideSettings() {
   document.getElementById('tab-panels').style.display     = '';
   document.getElementById('settings-content').style.display = 'none';
   if (S.autoRefresh) startTimer();
-  fetchAll();
+  // Thresholds may have just been edited — refresh before re-rendering the
+  // live dashboard so warn/crit bands reflect what was just saved.
+  fetchThresholds().then(fetchAll);
 }
 
 function loadSettingsData() {

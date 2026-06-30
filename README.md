@@ -148,7 +148,7 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 **Commercial use requires a paid license.**
 
-If you are a company or using this software as part of a commercial operation, you must obtain a commercial license before use. Contact **vasil.mitov@vimsoft.org** to discuss pricing.
+If you are a company or using this software as part of a commercial operation, you must obtain a commercial license before use. Contact **customer.service@vimsoft.org** to discuss pricing.
 
 See [LICENSE](LICENSE) for the full terms.
 

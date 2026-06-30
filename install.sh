@@ -12,7 +12,7 @@ warn()    { echo -e "${YELLOW}[!]${NC} $*"; }
 error()   { echo -e "${RED}[✗]${NC} $*"; exit 1; }
 heading() { echo -e "\n${BOLD}$*${NC}"; }
 
-heading "Activity Monitor — Setup"
+heading "PulseFrame — Setup"
 echo "Checking prerequisites and configuring your installation."
 
 # ── 1. Prerequisites ─────────────────────────────────────────────────────────
@@ -121,7 +121,7 @@ if curl -sf "${URL}/health" &>/dev/null; then
     echo -e "  ${BOLD}API:${NC}       ${URL}/api/all"
     echo -e "  ${BOLD}History:${NC}   ${URL}/api/history/metrics?hours=6"
     echo ""
-    info "Activity Monitor is running. Use 'docker compose logs -f' to follow logs."
+    info "PulseFrame is running. Use 'docker compose logs -f' to follow logs."
 else
     warn "Health check did not respond — the app may still be starting (initial metric collection takes a few seconds)"
     warn "Try: curl ${URL}/health"

@@ -31,8 +31,8 @@
 For most users this is all you need:
 
 ```bash
-git clone <repo-url> activity-monitor
-cd activity-monitor
+git clone <repo-url> pulseframe
+cd pulseframe
 ./install.sh
 ```
 
@@ -53,8 +53,8 @@ If you prefer to configure things yourself:
 ### 1. Clone the repository
 
 ```bash
-git clone <repo-url> activity-monitor
-cd activity-monitor
+git clone <repo-url> pulseframe
+cd pulseframe
 ```
 
 ### 2. Create the data directory
@@ -96,14 +96,14 @@ All runtime options live in `.env` (gitignored — safe to store your IP there).
 |---|---|---|
 | `BIND_HOST` | `127.0.0.1` | IP address the dashboard binds to on the host. See [Accessing the Dashboard](#accessing-the-dashboard) for options. |
 | `BIND_PORT` | `8081` | Host port. The container always listens on 8080 internally. |
-| `CONTAINER_NAME` | `activity-monitor` | Docker container name. Change this if you run multiple instances. |
+| `CONTAINER_NAME` | `pulseframe` | Docker container name. Change this if you run multiple instances. |
 
 Example `.env` for a Tailscale setup:
 
 ```env
 BIND_HOST=100.x.x.x
 BIND_PORT=8081
-CONTAINER_NAME=activity-monitor
+CONTAINER_NAME=pulseframe
 ```
 
 ---
@@ -214,7 +214,7 @@ The background collector runs an initial full metric sweep when the container st
 The `/etc/passwd` file is mounted read-only into the container for UID-to-username resolution. If you see numeric UIDs, verify the mount exists:
 
 ```bash
-docker exec activity-monitor ls /host/etc/passwd
+docker exec pulseframe ls /host/etc/passwd
 ```
 
 If missing, ensure your `docker-compose.yml` includes:

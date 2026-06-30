@@ -29,7 +29,7 @@ def _post(url, message):
         url, data=payload, method='POST',
         headers={
             'Content-Type': 'application/json',
-            'User-Agent': 'ActivityMonitor/1.0',
+            'User-Agent': 'PulseFrame/1.0',
         },
     )
     try:
@@ -43,7 +43,7 @@ def _post(url, message):
 
 
 def test_webhook(url):
-    return _post(url, '✅ **Activity Monitor** — webhook test successful!')
+    return _post(url, '✅ **PulseFrame** — webhook test successful!')
 
 
 def _fire(hooks, key, message, cooldown):

@@ -17,7 +17,7 @@ async def lifespan(_app: FastAPI):
     alerts.start_alert_loop()
     yield
 
-app = FastAPI(title="Server Activity Monitor", lifespan=lifespan)
+app = FastAPI(title="PulseFrame", lifespan=lifespan)
 
 # Add CORS middleware
 app.add_middleware(

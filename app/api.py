@@ -46,7 +46,7 @@ def get_cached_data():
 
 @app.route('/')
 def index():
-    return jsonify({"message": "Activity Monitor API is running"})
+    return jsonify({"message": "PulseFrame API is running"})
 
 @app.route('/api/overview')
 def overview():

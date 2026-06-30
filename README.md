@@ -1,14 +1,16 @@
-# Activity Monitor
+# PulseFrame
 
 A self-hosted, Docker-deployable Linux server monitoring dashboard with real-time metrics, alert webhooks, and persistent history — designed to run permanently on a server without measurably impacting its workload.
 
 **License:** Free for personal use · [Commercial license required](#license) for businesses
 
+By [vimsoft.org](https://vimsoft.org)
+
 ---
 
 ## What it does
 
-Activity Monitor gives you a live view of everything happening on your Linux server through a dark-themed web dashboard. It collects metrics every 10 seconds via a background collector, serves all data from an in-memory cache (so API requests are near-instant), and persists 30 days of history to a local SQLite database.
+PulseFrame gives you a live view of everything happening on your Linux server through a dark-themed web dashboard. It collects metrics every 10 seconds via a background collector, serves all data from an in-memory cache (so API requests are near-instant), and persists 30 days of history to a local SQLite database.
 
 ### Dashboard tabs
 
@@ -54,8 +56,8 @@ See **[INSTALL.md](INSTALL.md)** for the full guide including access options, co
 **Quick start:**
 
 ```bash
-git clone <repo-url> activity-monitor
-cd activity-monitor
+git clone <repo-url> pulseframe
+cd pulseframe
 ./install.sh
 ```
 
@@ -95,7 +97,7 @@ All options are set in `.env` (created by `install.sh`, gitignored):
 |---|---|---|
 | `BIND_HOST` | `127.0.0.1` | Host IP to bind the dashboard on |
 | `BIND_PORT` | `8081` | Host port |
-| `CONTAINER_NAME` | `activity-monitor` | Docker container name |
+| `CONTAINER_NAME` | `pulseframe` | Docker container name |
 
 ---
 
@@ -146,6 +148,10 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 **Commercial use requires a paid license.**
 
-If you are a company or using this software as part of a commercial operation, you must obtain a commercial license before use. Contact **alroycrusader@gmail.com** to discuss pricing.
+If you are a company or using this software as part of a commercial operation, you must obtain a commercial license before use. Contact **vasil.mitov@vimsoft.org** to discuss pricing.
 
 See [LICENSE](LICENSE) for the full terms.
+
+---
+
+[vimsoft.org](https://vimsoft.org)

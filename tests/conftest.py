@@ -1,0 +1,9 @@
+import os
+import tempfile
+
+# Point the SQLite history DB at a throwaway file for the whole test session,
+# before any test module imports app.storage (which reads DB_PATH at import
+# time). This keeps tests from writing into the repo's real data/ directory.
+os.environ.setdefault(
+    "DB_PATH", os.path.join(tempfile.mkdtemp(prefix="pulseframe-tests-"), "metrics.db")
+)

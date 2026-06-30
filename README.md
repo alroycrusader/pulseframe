@@ -120,6 +120,23 @@ All endpoints return JSON. Data is served from the in-memory cache and reflects 
 | `GET /api/system` | System info |
 | `GET /api/history/metrics?hours=N` | Historical metric snapshots (default 6 h) |
 | `GET /api/history/disk?hours=N&mount=X` | Historical disk usage, optional mount filter |
+| `GET /api/health/services` | Health of PulseFrame's own background services (collector, history storage, alerting config) |
+| `GET /api/settings/thresholds` | Current alert warn/crit thresholds — the dashboard renders these as threshold bands on live charts |
+
+---
+
+## Development
+
+Install test dependencies (not bundled in `requirements.txt`, which only lists runtime deps) and run the test suite:
+
+```bash
+pip install pytest httpx
+pytest tests/ -v
+```
+
+Tests use the `DB_PATH` environment variable (see `tests/conftest.py`) to point the history DB at a temp file, so running them never touches your real `data/` directory.
+
+The frontend (`app/static/`) is plain JS/CSS served statically — no build step. After editing `app.js` or `styles.css`, bump the `?v=N` query string on the corresponding `<script>`/`<link>` tag in `app/static/index.html` so browsers don't serve a stale cached copy.
 
 ---
 

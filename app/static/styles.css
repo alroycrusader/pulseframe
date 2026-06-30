@@ -595,6 +595,15 @@ tr:hover td { background: var(--surface-2); }
   border: 1px solid var(--pink);
   border-radius: var(--radius);
 }
+.empty-box {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 28px 16px;
+  text-align: center;
+  letter-spacing: 0.5px;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--radius);
+}
 
 /* ============================================================
    Cmdline
